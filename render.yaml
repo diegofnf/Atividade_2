@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: atividade2-web
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /api/config
+    envVars:
+      - key: APP_ENV
+        value: prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: atividade2-db
+          property: connectionString
+      - key: BACKUP_ROOT_FILE
+        value: /tmp/backup_atividade_2.sql
+      - key: AUTO_RESTORE_ON_EMPTY_DB
+        value: "true"
+      - key: BOOTSTRAP_BACKUP_FILE
+        value: backup_atividade_2.sql
+      - key: JUDGE_PROVIDER
+        value: remote_http
+      - key: JUDGE_PANEL_MODE
+        value: 2plus1
+      - key: JUDGE_EXECUTION_STRATEGY
+        value: sequential
+      - key: JUDGE_BATCH_SIZE
+        value: "10"
+      - key: REMOTE_JUDGE_MODEL
+        value: gpt-oss-120b
+      - key: REMOTE_SECONDARY_JUDGE_MODEL
+        value: llama-3.3-70b-instruct
+      - key: REMOTE_ARBITER_JUDGE_MODEL
+        value: m-prometheus-14b
+      - key: JUDGE_ARBITRATION_MIN_DELTA
+        value: "2"
+      - key: JUDGE_ALWAYS_RUN_ARBITER
+        value: "false"
+      - key: REMOTE_JUDGE_TIMEOUT_SECONDS
+        value: "180"
+      - key: REMOTE_JUDGE_TEMPERATURE
+        value: "0.0"
+      - key: REMOTE_JUDGE_MAX_TOKENS
+        value: "4000"
+      - key: REMOTE_JUDGE_TOP_P
+        value: "1.0"
+      - key: REMOTE_JUDGE_OPENAI_COMPATIBLE
+        value: "true"
+      - key: JUDGE_SAVE_RAW_RESPONSE
+        value: "true"
+      - key: REMOTE_JUDGE_BASE_URL
+        sync: false
+      - key: REMOTE_JUDGE_API_KEY
+        sync: false
+      - key: REMOTE_SECONDARY_JUDGE_BASE_URL
+        sync: false
+      - key: REMOTE_SECONDARY_JUDGE_API_KEY
+        sync: false
+      - key: REMOTE_ARBITER_JUDGE_BASE_URL
+        sync: false
+      - key: REMOTE_ARBITER_JUDGE_API_KEY
+        sync: false
+
+databases:
+  - name: atividade2-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: "18"
+    databaseName: app_dev

@@ -15,7 +15,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/* /tmp/postgresql.asc
 
-COPY pyproject.toml README.md backup_atividade_2_reset.sql ./
+COPY pyproject.toml README.md backup_atividade_2.sql backup_atividade_2_reset.sql ./
 COPY src ./src
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
@@ -25,4 +25,4 @@ RUN mkdir -p outputs/audit outputs/backup
 
 EXPOSE 8000
 
-CMD ["uvicorn", "atividade_2.web:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "python -m atividade_2.render_bootstrap && uvicorn atividade_2.web:app --host 0.0.0.0 --port ${PORT:-8000}"]

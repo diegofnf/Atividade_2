@@ -523,3 +523,31 @@ make db-down
 `atividade2.ipynb` permanece como artefato separado e não é necessário para subir ou validar o ambiente local.
 
 
+
+## Deploy no Render
+
+O repositorio inclui `render.yaml` na raiz com o caminho mais simples para publicar:
+
+- um `web service` Docker para a UI e pipeline;
+- um `Render Postgres` chamado `atividade2-db`;
+- restore automatico de `backup_atividade_2.sql` na primeira subida, somente se o banco estiver vazio.
+
+Como funciona:
+
+1. O Render cria o banco `app_dev`.
+2. O container sobe com `AUTO_RESTORE_ON_EMPTY_DB=true`.
+3. O bootstrap verifica se o schema `public` esta vazio.
+4. Se estiver, restaura o backup canonico da raiz.
+5. Nas proximas reinicializacoes, o restore e ignorado.
+
+Variaveis secretas que voce precisa preencher durante a criacao do Blueprint:
+
+- `REMOTE_JUDGE_BASE_URL`
+- `REMOTE_JUDGE_API_KEY`
+- opcionalmente:
+  - `REMOTE_SECONDARY_JUDGE_BASE_URL`
+  - `REMOTE_SECONDARY_JUDGE_API_KEY`
+  - `REMOTE_ARBITER_JUDGE_BASE_URL`
+  - `REMOTE_ARBITER_JUDGE_API_KEY`
+
+Observacao importante: o Postgres free do Render expira 30 dias apos a criacao. Para algo mais duradouro, o caminho natural e manter a app no Render e mover o banco para um provedor Postgres persistente.
