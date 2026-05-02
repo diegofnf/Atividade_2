@@ -20,21 +20,35 @@ REQUIRED_TABLES = (
     "prompt_juizes",
     "avaliacoes_juiz",
 )
+REQUIRED_DATA_TABLES = (
+    "datasets",
+    "modelos",
+    "perguntas",
+    "respostas_atividade_1",
+)
 
 
 def bootstrap_if_needed() -> bool:
     """Restore the canonical backup when the configured database is empty or partial."""
     if not _is_enabled(os.environ.get(BOOTSTRAP_FLAG)):
+        print("Render bootstrap disabled: AUTO_RESTORE_ON_EMPTY_DB is not enabled.", flush=True)
         return False
 
     settings = load_settings()
     with connect(settings.database_url) as connection:
         with connection.cursor() as cursor:
             if _is_bootstrap_complete(cursor):
+                print("Render bootstrap skipped: database already has the required schema and seed data.", flush=True)
                 return False
 
     backup_file = Path(os.environ.get(BOOTSTRAP_FILE_FLAG, str(DEFAULT_BACKUP_FILE)))
+    print(f"Render bootstrap restoring database from {backup_file}.", flush=True)
     DatabaseResetService(backup_file=backup_file).restore_backup(backup_file)
+    with connect(settings.database_url) as connection:
+        with connection.cursor() as cursor:
+            if not _is_bootstrap_complete(cursor):
+                raise RuntimeError("Render bootstrap restore finished, but required backup data is still missing.")
+    print("Render bootstrap completed successfully.", flush=True)
     return True
 
 
@@ -53,10 +67,10 @@ def _is_bootstrap_complete(cursor: object) -> bool:
     if not set(REQUIRED_TABLES).issubset(table_names):
         return False
 
-    cursor.execute("SELECT count(*) FROM datasets;")
-    dataset_count = int(cursor.fetchone()[0])
-    if dataset_count == 0:
-        return False
+    for table_name in REQUIRED_DATA_TABLES:
+        cursor.execute(f"SELECT count(*) FROM {table_name};")
+        if int(cursor.fetchone()[0]) == 0:
+            return False
 
     cursor.execute("SELECT count(*) FROM prompt_juizes WHERE ativo = TRUE;")
     active_prompt_count = int(cursor.fetchone()[0])
