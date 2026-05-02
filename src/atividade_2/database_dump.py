@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,6 +15,9 @@ from typing import Any
 from .config import load_settings
 
 DUMP_FILENAME_PATTERN = re.compile(r"^atividade_2_\d{8}_\d{6}\.sql$")
+OWNER_STATEMENT_PATTERN = re.compile(r"^\s*ALTER\s+(TABLE|SEQUENCE|VIEW|MATERIALIZED VIEW|FUNCTION|SCHEMA)\b.*\bOWNER TO\b", re.IGNORECASE)
+ACL_STATEMENT_PATTERN = re.compile(r"^\s*(GRANT|REVOKE)\b", re.IGNORECASE)
+SESSION_AUTH_PATTERN = re.compile(r"^\s*SET\s+SESSION AUTHORIZATION\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -54,7 +58,14 @@ class DatabaseDumpService:
         filename = f"atividade_2_{created_at:%Y%m%d_%H%M%S}.sql"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         output_path = (self.output_dir / filename).resolve()
-        command = [pg_dump, settings.database_url, "--file", str(output_path)]
+        command = [
+            pg_dump,
+            settings.database_url,
+            "--no-owner",
+            "--no-privileges",
+            "--file",
+            str(output_path),
+        ]
         try:
             completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=300)
         except subprocess.TimeoutExpired as error:
@@ -135,11 +146,15 @@ class DatabaseResetService:
             self.timeout_seconds,
             secret=database_url,
         )
-        _run_command(
-            [psql, "-v", "ON_ERROR_STOP=1", database_url, "-f", str(backup_file)],
-            self.timeout_seconds,
-            secret=database_url,
-        )
+        sanitized_backup = _sanitize_plain_sql_backup(backup_file)
+        try:
+            _run_command(
+                [psql, "-v", "ON_ERROR_STOP=1", database_url, "-f", str(sanitized_backup)],
+                self.timeout_seconds,
+                secret=database_url,
+            )
+        finally:
+            sanitized_backup.unlink(missing_ok=True)
         _run_command(
             [
                 psql,
@@ -188,6 +203,21 @@ def _redact(message: str, secret: str) -> str:
     redacted = message.replace(secret, "<redacted>")
     redacted = re.sub(r"postgresql://([^:\s]+):([^@\s]+)@", r"postgresql://\1:<redacted>@", redacted)
     return redacted.strip()
+
+
+def _sanitize_plain_sql_backup(source_path: Path) -> Path:
+    temp_file = tempfile.NamedTemporaryFile(prefix="av2_restore_", suffix=".sql", delete=False, mode="w", encoding="utf-8")
+    temp_path = Path(temp_file.name)
+    with source_path.open("r", encoding="utf-8") as source, temp_file:
+        for line in source:
+            if OWNER_STATEMENT_PATTERN.match(line):
+                continue
+            if ACL_STATEMENT_PATTERN.match(line):
+                continue
+            if SESSION_AUTH_PATTERN.match(line):
+                continue
+            temp_file.write(line)
+    return temp_path
 
 
 def _run_command(
