@@ -1126,14 +1126,24 @@ class JudgeRepository:
                     cm.nome_modelo,
                     jm.nome_modelo,
                     a.nota_atribuida,
-                    a.data_avaliacao
+                    a.data_avaliacao,
+                    COUNT(ma.id_meta_avaliacao) AS meta_count
                 FROM avaliacoes_juiz a
                 JOIN respostas_atividade_1 r ON r.id_resposta = a.id_resposta_ativa1
                 JOIN perguntas p ON p.id_pergunta = r.id_pergunta
                 JOIN datasets d ON d.id_dataset = p.id_dataset
                 JOIN modelos cm ON cm.id_modelo = r.id_modelo
                 JOIN modelos jm ON jm.id_modelo = a.id_modelo_juiz
+                LEFT JOIN meta_avaliacoes ma ON ma.id_avaliacao = a.id_avaliacao
                 WHERE d.nome_dataset = %s
+                GROUP BY
+                    a.id_avaliacao,
+                    p.id_pergunta,
+                    r.id_resposta,
+                    cm.nome_modelo,
+                    jm.nome_modelo,
+                    a.nota_atribuida,
+                    a.data_avaliacao
                 ORDER BY a.data_avaliacao DESC, a.id_avaliacao DESC;
                 """,
                 (dataset_name,),
@@ -1143,6 +1153,7 @@ class JudgeRepository:
             {
                 "value": str(int(row[0])),
                 "label": (
+                    f"{'✓' if int(row[7]) > 0 else '○'} "
                     f"Aval. {int(row[0])} | Q{int(row[1])} | "
                     f"{row[3]} x {row[4]} | nota {int(row[5])}"
                 ),
@@ -1153,6 +1164,8 @@ class JudgeRepository:
                 "judge_model": row[4],
                 "judge_score": int(row[5]),
                 "evaluated_at": row[6].isoformat() if row[6] is not None else None,
+                "meta_completed": int(row[7]) > 0,
+                "meta_count": int(row[7]),
             }
             for row in rows
         ]
