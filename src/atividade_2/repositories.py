@@ -1291,6 +1291,57 @@ class JudgeRepository:
             created_at=created_at.isoformat() if created_at is not None else None,
         )
 
+    def update_meta_evaluation(
+        self,
+        *,
+        meta_evaluation_id: int,
+        evaluation_id: int,
+        evaluator_name: str,
+        score: int,
+        rationale: str,
+    ) -> MetaEvaluationRecord:
+        with self.connection:
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE meta_avaliacoes
+                    SET
+                        nm_avaliador = %s,
+                        vl_nota = %s,
+                        ds_justificativa = %s
+                    WHERE id_meta_avaliacao = %s
+                      AND id_avaliacao = %s
+                    RETURNING created_at;
+                    """,
+                    (evaluator_name, score, rationale, meta_evaluation_id, evaluation_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise ValueError(f"Meta-avaliacao not found: {meta_evaluation_id}.")
+                created_at = row[0]
+        return MetaEvaluationRecord(
+            meta_evaluation_id=meta_evaluation_id,
+            evaluation_id=evaluation_id,
+            evaluator_name=evaluator_name,
+            score=score,
+            rationale=rationale,
+            created_at=created_at.isoformat() if created_at is not None else None,
+        )
+
+    def delete_meta_evaluation(self, *, meta_evaluation_id: int, evaluation_id: int) -> None:
+        with self.connection:
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM meta_avaliacoes
+                    WHERE id_meta_avaliacao = %s
+                      AND id_avaliacao = %s;
+                    """,
+                    (meta_evaluation_id, evaluation_id),
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError(f"Meta-avaliacao not found: {meta_evaluation_id}.")
+
 
 def _round_for_role(role: StoredJudgeRole) -> str:
     if role == "arbitro":

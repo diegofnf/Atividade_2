@@ -109,6 +109,7 @@ class PromptConfigPayload(BaseModel):
 
 
 class MetaEvaluationPayload(BaseModel):
+    meta_evaluation_id: int | None = None
     evaluation_id: int
     evaluator_name: str
     score: int = Field(ge=1, le=5)
@@ -373,10 +374,21 @@ def create_app(
     def save_meta_evaluation(payload: MetaEvaluationPayload, request: Request) -> dict:
         try:
             return request.app.state.meta_evaluation_service.save(
+                meta_evaluation_id=payload.meta_evaluation_id,
                 evaluation_id=payload.evaluation_id,
                 evaluator_name=payload.evaluator_name,
                 score=payload.score,
                 rationale=payload.rationale,
+            )
+        except (RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.delete("/api/meta-evaluations/{meta_evaluation_id}", dependencies=[Depends(_require_csrf)])
+    def delete_meta_evaluation(meta_evaluation_id: int, evaluation_id: int, request: Request) -> dict:
+        try:
+            return request.app.state.meta_evaluation_service.delete(
+                meta_evaluation_id=meta_evaluation_id,
+                evaluation_id=evaluation_id,
             )
         except (RuntimeError, ValueError) as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -1502,6 +1514,7 @@ _INDEX_HTML = """
         <label>Avaliador
           <input id="meta_evaluator_name" autocomplete="off" placeholder="Nome de quem esta auditando">
         </label>
+        <input id="meta_editing_id" type="hidden">
         <label>Nota da Meta-Avaliacao (1 a 5)
           <select id="meta_score">
             <option value="1">1</option>
@@ -1516,6 +1529,7 @@ _INDEX_HTML = """
         </label>
         <div class="actions">
           <button class="secondary" id="meta_reload" type="button">Recarregar</button>
+          <button class="secondary" id="meta_cancel_edit" type="button">Cancelar edicao</button>
           <button id="meta_save" type="button">Salvar</button>
         </div>
         <div id="meta_status" class="status prompt-status">Selecione uma avaliacao J1 para iniciar a meta-avaliacao.</div>
@@ -1530,10 +1544,11 @@ _INDEX_HTML = """
                 <th>avaliador</th>
                 <th>nota</th>
                 <th>justificativa</th>
+                <th>acoes</th>
               </tr>
             </thead>
             <tbody id="meta_records_body">
-              <tr><td colspan="4" class="muted">Nenhuma meta-avaliacao carregada.</td></tr>
+              <tr><td colspan="5" class="muted">Nenhuma meta-avaliacao carregada.</td></tr>
             </tbody>
           </table>
         </div>
@@ -2834,6 +2849,7 @@ _INDEX_HTML = """
       const evaluatorName = value("meta_evaluator_name").trim();
       const rationale = value("meta_rationale").trim();
       const evaluationId = Number(value("meta_evaluation_select"));
+      const metaEvaluationId = value("meta_editing_id") ? Number(value("meta_editing_id")) : null;
       if (!evaluationId) {
         setText("meta_status", "Selecione uma avaliacao J1.");
         return;
@@ -2848,6 +2864,7 @@ _INDEX_HTML = """
       }
       try {
         const data = await putJson("/api/meta-evaluations", {
+          meta_evaluation_id: metaEvaluationId,
           evaluation_id: evaluationId,
           evaluator_name: evaluatorName,
           score: Number(value("meta_score")),
@@ -2855,10 +2872,12 @@ _INDEX_HTML = """
         });
         await loadMetaOptions();
         renderMetaEvaluationState(data.subject, data.records || []);
-        document.getElementById("meta_rationale").value = "";
+        resetMetaForm();
         setText(
           "meta_status",
-          `Meta-avaliacao registrada com nota ${display(data.record?.score)} em ${formatDateTime(data.record?.created_at)}.`
+          data.action === "updated"
+            ? `Meta-avaliacao atualizada em ${formatDateTime(data.record?.created_at)}.`
+            : `Meta-avaliacao registrada com nota ${display(data.record?.score)} em ${formatDateTime(data.record?.created_at)}.`
         );
       } catch (error) {
         setText("meta_status", friendlyErrorMessage(error.message));
@@ -2908,7 +2927,7 @@ _INDEX_HTML = """
       if (!records.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-        cell.colSpan = 4;
+        cell.colSpan = 5;
         cell.className = "muted";
         cell.textContent = "Nenhuma meta-avaliacao registrada para essa avaliacao.";
         row.appendChild(cell);
@@ -2921,8 +2940,59 @@ _INDEX_HTML = """
         appendCell(row, display(entry.evaluator_name));
         appendCell(row, display(entry.score));
         appendCell(row, display(entry.rationale));
+        const actionsCell = document.createElement("td");
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "secondary";
+        editButton.textContent = "Editar";
+        editButton.onclick = () => beginMetaEdit(entry);
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "secondary";
+        deleteButton.textContent = "Excluir";
+        deleteButton.onclick = () => deleteMetaEvaluation(entry.meta_evaluation_id);
+        actionsCell.appendChild(editButton);
+        actionsCell.appendChild(document.createTextNode(" "));
+        actionsCell.appendChild(deleteButton);
+        row.appendChild(actionsCell);
         body.appendChild(row);
       });
+    }
+
+    function beginMetaEdit(entry) {
+      document.getElementById("meta_editing_id").value = String(entry.meta_evaluation_id);
+      document.getElementById("meta_evaluator_name").value = entry.evaluator_name || "";
+      document.getElementById("meta_score").value = String(entry.score || 1);
+      document.getElementById("meta_rationale").value = entry.rationale || "";
+      document.getElementById("meta_save").textContent = "Atualizar";
+      setText("meta_status", `Editando meta-avaliacao ${display(entry.meta_evaluation_id)}.`);
+    }
+
+    function resetMetaForm() {
+      document.getElementById("meta_editing_id").value = "";
+      document.getElementById("meta_rationale").value = "";
+      document.getElementById("meta_score").value = "1";
+      document.getElementById("meta_save").textContent = "Salvar";
+    }
+
+    async function deleteMetaEvaluation(metaEvaluationId) {
+      const evaluationId = Number(value("meta_evaluation_select"));
+      if (!evaluationId || !metaEvaluationId) return;
+      if (!window.confirm("Excluir esta meta-avaliacao?")) return;
+      try {
+        const response = await fetch(`/api/meta-evaluations/${metaEvaluationId}?evaluation_id=${encodeURIComponent(evaluationId)}`, {
+          method: "DELETE",
+          headers: {"x-csrf-token": csrfToken},
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Falha ao excluir meta-avaliacao.");
+        await loadMetaOptions();
+        renderMetaEvaluationState(data.subject, data.records || []);
+        resetMetaForm();
+        setText("meta_status", "Meta-avaliacao excluida.");
+      } catch (error) {
+        setText("meta_status", friendlyErrorMessage(error.message));
+      }
     }
 
     async function savePromptConfig() {
@@ -3226,6 +3296,10 @@ _INDEX_HTML = """
     document.getElementById("prompt_save").onclick = () => savePromptConfig();
     document.getElementById("meta_evaluation_select").onchange = () => loadMetaEvaluation();
     document.getElementById("meta_reload").onclick = () => loadMetaEvaluation();
+    document.getElementById("meta_cancel_edit").onclick = () => {
+      resetMetaForm();
+      setText("meta_status", `Avaliacao ${display(value("meta_evaluation_select"))} carregada para meta-avaliacao.`);
+    };
     document.getElementById("meta_save").onclick = () => saveMetaEvaluation();
     document.getElementById("dashboard-refresh").onclick = loadDashboard;
     document.getElementById("dashboard-model-carousel-prev").onclick = () => moveCarousel(-1);

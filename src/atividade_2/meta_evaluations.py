@@ -48,6 +48,7 @@ class MetaEvaluationService:
     def save(
         self,
         *,
+        meta_evaluation_id: int | None,
         evaluation_id: int,
         evaluator_name: str,
         score: int,
@@ -65,18 +66,47 @@ class MetaEvaluationService:
             subject = repository.get_meta_evaluation_subject(evaluation_id=evaluation_id, dataset="J1")
             if subject is None:
                 raise ValueError("Avaliacao J1 nao encontrada para meta-avaliacao.")
-            saved = repository.create_meta_evaluation(
-                evaluation_id=evaluation_id,
-                evaluator_name=evaluator_name,
-                score=score,
-                rationale=rationale,
-            )
+            if meta_evaluation_id is None:
+                saved = repository.create_meta_evaluation(
+                    evaluation_id=evaluation_id,
+                    evaluator_name=evaluator_name,
+                    score=score,
+                    rationale=rationale,
+                )
+                action = "created"
+            else:
+                saved = repository.update_meta_evaluation(
+                    meta_evaluation_id=meta_evaluation_id,
+                    evaluation_id=evaluation_id,
+                    evaluator_name=evaluator_name,
+                    score=score,
+                    rationale=rationale,
+                )
+                action = "updated"
             records = repository.list_meta_evaluations(evaluation_id=evaluation_id)
         finally:
             connection.close()
         return {
+            "action": action,
             "record": asdict(saved),
             "subject": asdict(subject) if subject is not None else None,
+            "records": [asdict(record) for record in records],
+        }
+
+    def delete(self, *, meta_evaluation_id: int, evaluation_id: int) -> dict[str, Any]:
+        connection = self._connect(self._settings_loader().database_url)
+        try:
+            repository = self._make_repository(connection)
+            subject = repository.get_meta_evaluation_subject(evaluation_id=evaluation_id, dataset="J1")
+            if subject is None:
+                raise ValueError("Avaliacao J1 nao encontrada para meta-avaliacao.")
+            repository.delete_meta_evaluation(meta_evaluation_id=meta_evaluation_id, evaluation_id=evaluation_id)
+            records = repository.list_meta_evaluations(evaluation_id=evaluation_id)
+        finally:
+            connection.close()
+        return {
+            "action": "deleted",
+            "subject": asdict(subject),
             "records": [asdict(record) for record in records],
         }
 

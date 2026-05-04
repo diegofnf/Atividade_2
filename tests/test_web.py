@@ -700,6 +700,7 @@ class FakeJudgePromptConfigService:
 class FakeMetaEvaluationService:
     def __init__(self) -> None:
         self.saved = []
+        self.deleted = []
 
     def options(self) -> dict:
         return {
@@ -744,11 +745,12 @@ class FakeMetaEvaluationService:
             ],
         }
 
-    def save(self, *, evaluation_id: int, evaluator_name: str, score: int, rationale: str) -> dict:
-        self.saved.append((evaluation_id, evaluator_name, score, rationale))
+    def save(self, *, meta_evaluation_id: int | None, evaluation_id: int, evaluator_name: str, score: int, rationale: str) -> dict:
+        self.saved.append((meta_evaluation_id, evaluation_id, evaluator_name, score, rationale))
         return {
+            "action": "updated" if meta_evaluation_id else "created",
             "record": {
-                "meta_evaluation_id": 2,
+                "meta_evaluation_id": meta_evaluation_id or 2,
                 "evaluation_id": evaluation_id,
                 "evaluator_name": evaluator_name,
                 "score": score,
@@ -759,7 +761,7 @@ class FakeMetaEvaluationService:
             "records": self.get(evaluation_id=evaluation_id)["records"]
             + [
                 {
-                    "meta_evaluation_id": 2,
+                    "meta_evaluation_id": meta_evaluation_id or 2,
                     "evaluation_id": evaluation_id,
                     "evaluator_name": evaluator_name,
                     "score": score,
@@ -767,6 +769,14 @@ class FakeMetaEvaluationService:
                     "created_at": "2026-05-04T12:00:00",
                 }
             ],
+        }
+
+    def delete(self, *, meta_evaluation_id: int, evaluation_id: int) -> dict:
+        self.deleted.append((meta_evaluation_id, evaluation_id))
+        return {
+            "action": "deleted",
+            "subject": self.get(evaluation_id=evaluation_id)["subject"],
+            "records": [],
         }
 
 
@@ -954,6 +964,7 @@ def test_web_index_contains_meta_evaluation_tab() -> None:
     assert 'data-tab="meta-panel">Meta-Avaliacao</button>' in response.text
     assert 'id="meta_evaluation_select"' in response.text
     assert 'id="meta_save"' in response.text
+    assert 'id="meta_cancel_edit"' in response.text
     assert 'id="meta_subject_chain_of_thought"' in response.text
     assert 'id="meta_records_body"' in response.text
     assert response.text.index("Meta-avaliacoes registradas") < response.text.index("Avaliacao selecionada")
@@ -977,6 +988,7 @@ def test_meta_evaluation_endpoints_return_options_and_allow_save() -> None:
         "/api/meta-evaluations",
         headers={"x-csrf-token": token},
         json={
+            "meta_evaluation_id": 1,
             "evaluation_id": 101,
             "evaluator_name": "Diego",
             "score": 4,
@@ -984,7 +996,15 @@ def test_meta_evaluation_endpoints_return_options_and_allow_save() -> None:
         },
     )
     assert saved.status_code == 200
-    assert meta_service.saved[-1] == (101, "Diego", 4, "O juiz foi justo na avaliacao.")
+    assert meta_service.saved[-1] == (1, 101, "Diego", 4, "O juiz foi justo na avaliacao.")
+
+    deleted = client.request(
+        "DELETE",
+        "/api/meta-evaluations/1?evaluation_id=101",
+        headers={"x-csrf-token": token},
+    )
+    assert deleted.status_code == 200
+    assert meta_service.deleted[-1] == (1, 101)
 
 
 def test_tab_navigation_does_not_cancel_active_run_or_stop_polling() -> None:
