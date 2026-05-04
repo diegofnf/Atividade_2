@@ -91,6 +91,38 @@ def test_restore_backup_adds_dashboard_compatibility_columns(monkeypatch, tmp_pa
     assert "ADD COLUMN IF NOT EXISTS status_avaliacao" in alter_sql
 
 
+def test_restore_backup_sanitizes_postgres_18_transaction_timeout(monkeypatch, tmp_path) -> None:
+    backup_file = tmp_path / "atividade_2_20260430_120000.sql"
+    backup_file.write_text(
+        "\n".join(
+            [
+                "SET statement_timeout = 0;",
+                "SET transaction_timeout = 0;",
+                "SELECT 1;",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    restored_sql = []
+
+    monkeypatch.setattr(database_dump.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    def fake_run_command(command, timeout_seconds, *, secret=None, expected_stdout=None):
+        if "-f" in command:
+            restored_sql.append(Path(command[command.index("-f") + 1]).read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(database_dump, "_run_command", fake_run_command)
+    service = DatabaseResetService(
+        settings_loader=lambda: SimpleNamespace(database_url="postgresql://postgres:postgres@localhost:5432/app_dev")
+    )
+
+    service.restore_backup(backup_file)
+
+    assert "SET statement_timeout = 0;" in restored_sql[0]
+    assert "SET transaction_timeout" not in restored_sql[0]
+    assert "SELECT 1;" in restored_sql[0]
+
+
 def test_reset_service_defaults_to_fixed_reset_backup() -> None:
     service = DatabaseResetService()
 

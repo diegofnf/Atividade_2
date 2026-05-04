@@ -18,6 +18,7 @@ DUMP_FILENAME_PATTERN = re.compile(r"^atividade_2_\d{8}_\d{6}\.sql$")
 OWNER_STATEMENT_PATTERN = re.compile(r"^\s*ALTER\s+(TABLE|SEQUENCE|VIEW|MATERIALIZED VIEW|FUNCTION|SCHEMA)\b.*\bOWNER TO\b", re.IGNORECASE)
 ACL_STATEMENT_PATTERN = re.compile(r"^\s*(GRANT|REVOKE)\b", re.IGNORECASE)
 SESSION_AUTH_PATTERN = re.compile(r"^\s*SET\s+SESSION AUTHORIZATION\b", re.IGNORECASE)
+TRANSACTION_TIMEOUT_PATTERN = re.compile(r"^\s*SET\s+transaction_timeout\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -215,6 +216,8 @@ def _sanitize_plain_sql_backup(source_path: Path) -> Path:
             if ACL_STATEMENT_PATTERN.match(line):
                 continue
             if SESSION_AUTH_PATTERN.match(line):
+                continue
+            if TRANSACTION_TIMEOUT_PATTERN.match(line):
                 continue
             temp_file.write(line)
     return temp_path

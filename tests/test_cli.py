@@ -41,8 +41,14 @@ def test_run_judge_help_exposes_batch_size(capsys: pytest.CaptureFixture[str]) -
     assert "--preflight-report" in output
 
 
-def test_run_judge_dry_run_prints_single_summary(capsys: pytest.CaptureFixture[str], tmp_path) -> None:
+def test_run_judge_dry_run_prints_single_summary(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
     """Dry-run should resolve config without DB or HTTP calls."""
+    monkeypatch.setenv("REMOTE_JUDGE_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("REMOTE_JUDGE_API_KEY", "test-key")
     audit_path = tmp_path / "audit.log"
 
     exit_code = cli.main(
