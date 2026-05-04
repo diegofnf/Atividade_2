@@ -1153,7 +1153,7 @@ class JudgeRepository:
             {
                 "value": str(int(row[0])),
                 "label": (
-                    f"{'✓' if int(row[7]) > 0 else '○'} "
+                    f"{'[feito]' if int(row[7]) > 0 else '[pendente]'} "
                     f"Aval. {int(row[0])} | Q{int(row[1])} | "
                     f"{row[3]} x {row[4]} | nota {int(row[5])}"
                 ),

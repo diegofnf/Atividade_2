@@ -706,7 +706,7 @@ class FakeMetaEvaluationService:
             "evaluations": [
                 {
                     "value": "101",
-                    "label": "○ Aval. 101 | Q71 | candidato x juiz | nota 4",
+                    "label": "[pendente] Aval. 101 | Q71 | candidato x juiz | nota 4",
                     "meta_completed": False,
                     "meta_count": 0,
                 }
@@ -967,7 +967,7 @@ def test_meta_evaluation_endpoints_return_options_and_allow_save() -> None:
     options = client.get("/api/meta-evaluations/options")
     assert options.status_code == 200
     assert options.json()["evaluations"][0]["value"] == "101"
-    assert options.json()["evaluations"][0]["label"].startswith("○ ")
+    assert options.json()["evaluations"][0]["label"].startswith("[pendente] ")
 
     current = client.get("/api/meta-evaluations", params={"evaluation_id": 101})
     assert current.status_code == 200
