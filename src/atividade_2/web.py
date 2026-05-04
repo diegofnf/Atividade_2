@@ -24,6 +24,7 @@ from .dashboard import DashboardService, parse_dashboard_filters
 from .database_dump import DatabaseDumpService, DatabaseResetService, resolve_dump_path
 from .judge_prompt_configs import JudgePromptConfigService
 from .judge_clients.remote_http import RemoteJudgeError
+from .meta_evaluations import MetaEvaluationService
 from .parser import JudgeParseError
 from .run_judge_service import RunJudgeRequest, RunJudgeResult, RunJudgeService
 
@@ -101,6 +102,13 @@ class PromptConfigPayload(BaseModel):
     rubric: str
     output: str
     changed_by: str
+
+
+class MetaEvaluationPayload(BaseModel):
+    evaluation_id: int
+    evaluator_name: str
+    score: int = Field(ge=1, le=5)
+    rationale: str
 
 
 @dataclass
@@ -251,6 +259,7 @@ def create_app(
     dump_service: DatabaseDumpService | None = None,
     database_reset_service: DatabaseResetService | None = None,
     judge_prompt_service: JudgePromptConfigService | None = None,
+    meta_evaluation_service: MetaEvaluationService | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Atividade 2 Judge Console")
     app.state.csrf_token = secrets.token_urlsafe(32)
@@ -261,6 +270,7 @@ def create_app(
     app.state.dump_service = dump_service or DatabaseDumpService(output_dir=backup_dir)
     app.state.database_reset_service = database_reset_service or DatabaseResetService()
     app.state.judge_prompt_service = judge_prompt_service or JudgePromptConfigService()
+    app.state.meta_evaluation_service = meta_evaluation_service or MetaEvaluationService()
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
@@ -324,6 +334,32 @@ def create_app(
                 rubric=payload.rubric,
                 output=payload.output,
                 changed_by=payload.changed_by,
+            )
+        except (RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.get("/api/meta-evaluations/options")
+    def get_meta_evaluation_options(request: Request) -> dict:
+        try:
+            return request.app.state.meta_evaluation_service.options()
+        except (RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+
+    @app.get("/api/meta-evaluations")
+    def get_meta_evaluation(evaluation_id: int, request: Request) -> dict:
+        try:
+            return request.app.state.meta_evaluation_service.get(evaluation_id=evaluation_id)
+        except (RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.put("/api/meta-evaluations", dependencies=[Depends(_require_csrf)])
+    def save_meta_evaluation(payload: MetaEvaluationPayload, request: Request) -> dict:
+        try:
+            return request.app.state.meta_evaluation_service.save(
+                evaluation_id=payload.evaluation_id,
+                evaluator_name=payload.evaluator_name,
+                score=payload.score,
+                rationale=payload.rationale,
             )
         except (RuntimeError, ValueError) as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -985,7 +1021,8 @@ _INDEX_HTML = """
     <button class="tab-button active" type="button" data-tab="dashboard-panel">Dashboard</button>
     <button class="tab-button" type="button" data-tab="execution-panel">Execucao</button>
     <button class="tab-button" type="button" data-tab="history-panel">Execucoes anteriores</button>
-    <button class="tab-button" type="button" data-tab="prompt-panel">Prompt Juizes</button>
+      <button class="tab-button" type="button" data-tab="prompt-panel">Prompt Juizes</button>
+      <button class="tab-button" type="button" data-tab="meta-panel">Meta-Avaliacao</button>
   </nav>
   <main id="dashboard-panel" class="dashboard-layout tab-panel">
     <aside class="dashboard-filters">
@@ -1439,6 +1476,84 @@ _INDEX_HTML = """
         </div>
       </section>
     </div>
+    <div id="meta-panel" class="prompt-layout tab-panel" hidden>
+      <aside>
+        <h2>Meta-Avaliacao</h2>
+        <label>Avaliacao J1
+          <select id="meta_evaluation_select"></select>
+        </label>
+        <label>Avaliador
+          <input id="meta_evaluator_name" autocomplete="off" placeholder="Nome de quem esta auditando">
+        </label>
+        <label>Nota da Meta-Avaliacao (1 a 5)
+          <select id="meta_score">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <label>Justificativa
+          <textarea id="meta_rationale" placeholder="Explique se o juiz foi justo, aderente ao gabarito e consistente na nota atribuida."></textarea>
+        </label>
+        <div class="actions">
+          <button class="secondary" id="meta_reload" type="button">Recarregar</button>
+          <button id="meta_save" type="button">Salvar</button>
+        </div>
+        <div id="meta_status" class="status prompt-status">Selecione uma avaliacao J1 para iniciar a meta-avaliacao.</div>
+      </aside>
+      <section>
+        <div class="prompt-preview">
+          <div class="prompt-preview-card">
+            <h3>Avaliacao selecionada</h3>
+            <div class="muted" id="meta_subject_meta">Nenhuma avaliacao carregada.</div>
+            <table aria-label="Resumo da avaliacao selecionada">
+              <tbody>
+                <tr><th>Modelo candidato</th><td id="meta_subject_candidate_model" class="muted">-</td></tr>
+                <tr><th>Modelo juiz</th><td id="meta_subject_judge_model" class="muted">-</td></tr>
+                <tr><th>Nota do juiz</th><td id="meta_subject_judge_score" class="muted">-</td></tr>
+                <tr><th>Prompt</th><td id="meta_subject_prompt_version" class="muted">-</td></tr>
+                <tr><th>Avaliada em</th><td id="meta_subject_evaluated_at" class="muted">-</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="prompt-preview-card">
+            <h3>Questao</h3>
+            <pre id="meta_subject_question">Selecione uma avaliacao para ver o enunciado.</pre>
+          </div>
+          <div class="prompt-preview-card">
+            <h3>Gabarito</h3>
+            <pre id="meta_subject_reference">Selecione uma avaliacao para ver o gabarito.</pre>
+          </div>
+          <div class="prompt-preview-card">
+            <h3>Resposta do candidato</h3>
+            <pre id="meta_subject_candidate_answer">Selecione uma avaliacao para ver a resposta candidata.</pre>
+          </div>
+          <div class="prompt-preview-card">
+            <h3>Justificativa do juiz</h3>
+            <pre id="meta_subject_judge_rationale">Selecione uma avaliacao para ver a justificativa do juiz.</pre>
+          </div>
+        </div>
+        <div style="height:16px"></div>
+        <h2>Meta-avaliacoes registradas</h2>
+        <div class="table-wrap prompt-log-table">
+          <table aria-label="Historico de meta-avaliacoes">
+            <thead>
+              <tr>
+                <th>quando</th>
+                <th>avaliador</th>
+                <th>nota</th>
+                <th>justificativa</th>
+              </tr>
+            </thead>
+            <tbody id="meta_records_body">
+              <tr><td colspan="4" class="muted">Nenhuma meta-avaliacao carregada.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   <dialog id="details-dialog">
     <div class="dialog-head">
       <strong id="details-title">Detalhes da avaliacao</strong>
@@ -1496,6 +1611,7 @@ _INDEX_HTML = """
     let pollTimer = null;
     let historyLoaded = false;
     let promptOptionsLoaded = false;
+    let metaOptionsLoaded = false;
     let dashboardLoaded = false;
     let currentAuditLogUrl = null;
     let activeRunId = null;
@@ -2675,6 +2791,135 @@ _INDEX_HTML = """
       }
     }
 
+    async function loadMetaOptions() {
+      const response = await fetch("/api/meta-evaluations/options");
+      const data = await response.json();
+      populateSelect("meta_evaluation_select", data.evaluations || [], "value", "label");
+      metaOptionsLoaded = true;
+      if (value("meta_evaluation_select")) await loadMetaEvaluation();
+      else renderMetaEvaluationState(null, []);
+    }
+
+    async function loadMetaEvaluation() {
+      const evaluationId = value("meta_evaluation_select");
+      if (!evaluationId) {
+        renderMetaEvaluationState(null, []);
+        setText("meta_status", "Nenhuma avaliacao J1 disponivel para meta-avaliacao.");
+        return;
+      }
+      setText("meta_status", "Carregando avaliacao...");
+      try {
+        const response = await fetch(`/api/meta-evaluations?evaluation_id=${encodeURIComponent(evaluationId)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Falha ao carregar meta-avaliacao.");
+        renderMetaEvaluationState(data.subject, data.records || []);
+        if (data.subject) {
+          setText(
+            "meta_status",
+            `Avaliacao ${display(data.subject.evaluation_id)} carregada para meta-avaliacao.`
+          );
+        } else {
+          setText("meta_status", "Avaliacao nao encontrada.");
+        }
+      } catch (error) {
+        setText("meta_status", friendlyErrorMessage(error.message));
+      }
+    }
+
+    async function saveMetaEvaluation() {
+      const evaluatorName = value("meta_evaluator_name").trim();
+      const rationale = value("meta_rationale").trim();
+      const evaluationId = Number(value("meta_evaluation_select"));
+      if (!evaluationId) {
+        setText("meta_status", "Selecione uma avaliacao J1.");
+        return;
+      }
+      if (!evaluatorName) {
+        setText("meta_status", "Informe o nome do avaliador.");
+        return;
+      }
+      if (!rationale) {
+        setText("meta_status", "Informe a justificativa da meta-avaliacao.");
+        return;
+      }
+      try {
+        const data = await putJson("/api/meta-evaluations", {
+          evaluation_id: evaluationId,
+          evaluator_name: evaluatorName,
+          score: Number(value("meta_score")),
+          rationale: rationale
+        });
+        renderMetaEvaluationState(data.subject, data.records || []);
+        document.getElementById("meta_rationale").value = "";
+        setText(
+          "meta_status",
+          `Meta-avaliacao registrada com nota ${display(data.record?.score)} em ${formatDateTime(data.record?.created_at)}.`
+        );
+      } catch (error) {
+        setText("meta_status", friendlyErrorMessage(error.message));
+      }
+    }
+
+    function renderMetaEvaluationState(subject, records) {
+      renderMetaSubject(subject);
+      renderMetaRecords(records || []);
+    }
+
+    function renderMetaSubject(subject) {
+      if (!subject) {
+        setText("meta_subject_meta", "Nenhuma avaliacao carregada.");
+        setText("meta_subject_candidate_model", "-");
+        setText("meta_subject_judge_model", "-");
+        setText("meta_subject_judge_score", "-");
+        setText("meta_subject_prompt_version", "-");
+        setText("meta_subject_evaluated_at", "-");
+        setText("meta_subject_question", "Selecione uma avaliacao para ver o enunciado.");
+        setText("meta_subject_reference", "Selecione uma avaliacao para ver o gabarito.");
+        setText("meta_subject_candidate_answer", "Selecione uma avaliacao para ver a resposta candidata.");
+        setText("meta_subject_judge_rationale", "Selecione uma avaliacao para ver a justificativa do juiz.");
+        return;
+      }
+      const promptLabel = subject.prompt_version
+        ? `v${display(subject.prompt_version)}${subject.prompt_created_by ? ` | ${subject.prompt_created_by}` : ""}`
+        : "-";
+      setText(
+        "meta_subject_meta",
+        `Dataset ${display(subject.dataset)} | avaliacao ${display(subject.evaluation_id)} | questao ${display(subject.question_id)} | resposta ${display(subject.answer_id)}`
+      );
+      setText("meta_subject_candidate_model", display(subject.candidate_model));
+      setText("meta_subject_judge_model", display(subject.judge_model));
+      setText("meta_subject_judge_score", display(subject.judge_score));
+      setText("meta_subject_prompt_version", promptLabel);
+      setText("meta_subject_evaluated_at", formatDateTime(subject.evaluated_at));
+      setText("meta_subject_question", subject.question_text || "-");
+      setText("meta_subject_reference", subject.reference_answer || "-");
+      setText("meta_subject_candidate_answer", subject.candidate_answer || "-");
+      setText("meta_subject_judge_rationale", subject.judge_rationale || "-");
+    }
+
+    function renderMetaRecords(records) {
+      const body = document.getElementById("meta_records_body");
+      body.textContent = "";
+      if (!records.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.className = "muted";
+        cell.textContent = "Nenhuma meta-avaliacao registrada para essa avaliacao.";
+        row.appendChild(cell);
+        body.appendChild(row);
+        return;
+      }
+      records.forEach((entry) => {
+        const row = document.createElement("tr");
+        appendCell(row, formatDateTime(entry.created_at));
+        appendCell(row, display(entry.evaluator_name));
+        appendCell(row, display(entry.score));
+        appendCell(row, display(entry.rationale));
+        body.appendChild(row);
+      });
+    }
+
     async function savePromptConfig() {
       const changedBy = value("prompt_changed_by").trim();
       if (!changedBy) {
@@ -2826,6 +3071,7 @@ _INDEX_HTML = """
       if (targetId === "dashboard-panel") loadDashboard();
       if (targetId === "history-panel" && !historyLoaded) loadHistory();
       if (targetId === "prompt-panel" && !promptOptionsLoaded) loadPromptOptions();
+      if (targetId === "meta-panel" && !metaOptionsLoaded) loadMetaOptions();
     }
 
     async function loadConfig() {
@@ -2966,6 +3212,9 @@ _INDEX_HTML = """
     document.getElementById("prompt_dataset").onchange = () => loadPromptConfig();
     document.getElementById("prompt_reload").onclick = () => loadPromptConfig();
     document.getElementById("prompt_save").onclick = () => savePromptConfig();
+    document.getElementById("meta_evaluation_select").onchange = () => loadMetaEvaluation();
+    document.getElementById("meta_reload").onclick = () => loadMetaEvaluation();
+    document.getElementById("meta_save").onclick = () => saveMetaEvaluation();
     document.getElementById("dashboard-refresh").onclick = loadDashboard;
     document.getElementById("dashboard-model-carousel-prev").onclick = () => moveCarousel(-1);
     document.getElementById("dashboard-model-carousel-next").onclick = () => moveCarousel(1);

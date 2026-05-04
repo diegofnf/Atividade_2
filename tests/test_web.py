@@ -697,6 +697,76 @@ class FakeJudgePromptConfigService:
         }
 
 
+class FakeMetaEvaluationService:
+    def __init__(self) -> None:
+        self.saved = []
+
+    def options(self) -> dict:
+        return {
+            "evaluations": [
+                {
+                    "value": "101",
+                    "label": "Aval. 101 | Q71 | candidato x juiz | nota 4",
+                }
+            ]
+        }
+
+    def get(self, *, evaluation_id: int) -> dict:
+        return {
+            "subject": {
+                "evaluation_id": evaluation_id,
+                "dataset": "J1",
+                "question_id": 71,
+                "answer_id": 1,
+                "candidate_model": "modelo-candidato",
+                "judge_model": "modelo-juiz",
+                "judge_score": 4,
+                "judge_rationale": "Justificativa do juiz",
+                "question_text": "Enunciado da questao",
+                "reference_answer": "Gabarito oficial",
+                "candidate_answer": "Resposta do candidato",
+                "evaluated_at": "2026-05-04T10:00:00",
+                "prompt_version": 6,
+                "prompt_created_by": "Diego",
+            },
+            "records": [
+                {
+                    "meta_evaluation_id": 1,
+                    "evaluation_id": evaluation_id,
+                    "evaluator_name": "Ana",
+                    "score": 5,
+                    "rationale": "O juiz foi consistente.",
+                    "created_at": "2026-05-04T11:00:00",
+                }
+            ],
+        }
+
+    def save(self, *, evaluation_id: int, evaluator_name: str, score: int, rationale: str) -> dict:
+        self.saved.append((evaluation_id, evaluator_name, score, rationale))
+        return {
+            "record": {
+                "meta_evaluation_id": 2,
+                "evaluation_id": evaluation_id,
+                "evaluator_name": evaluator_name,
+                "score": score,
+                "rationale": rationale,
+                "created_at": "2026-05-04T12:00:00",
+            },
+            "subject": self.get(evaluation_id=evaluation_id)["subject"],
+            "records": self.get(evaluation_id=evaluation_id)["records"]
+            + [
+                {
+                    "meta_evaluation_id": 2,
+                    "evaluation_id": evaluation_id,
+                    "evaluator_name": evaluator_name,
+                    "score": score,
+                    "rationale": rationale,
+                    "created_at": "2026-05-04T12:00:00",
+                }
+            ],
+        }
+
+
 def test_web_index_contains_progress_element() -> None:
     client = TestClient(create_app(FakeRunJudgeService()))
 
@@ -870,6 +940,46 @@ def test_judge_prompt_endpoints_return_options_and_allow_save() -> None:
         "nova saida",
         "Diego",
     )
+
+
+def test_web_index_contains_meta_evaluation_tab() -> None:
+    client = TestClient(create_app(FakeRunJudgeService(), meta_evaluation_service=FakeMetaEvaluationService()))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'data-tab="meta-panel">Meta-Avaliacao</button>' in response.text
+    assert 'id="meta_evaluation_select"' in response.text
+    assert 'id="meta_save"' in response.text
+    assert 'id="meta_subject_judge_rationale"' in response.text
+    assert 'id="meta_records_body"' in response.text
+
+
+def test_meta_evaluation_endpoints_return_options_and_allow_save() -> None:
+    meta_service = FakeMetaEvaluationService()
+    client = TestClient(create_app(FakeRunJudgeService(), meta_evaluation_service=meta_service))
+    token = client.get("/api/config").json()["csrf_token"]
+
+    options = client.get("/api/meta-evaluations/options")
+    assert options.status_code == 200
+    assert options.json()["evaluations"][0]["value"] == "101"
+
+    current = client.get("/api/meta-evaluations", params={"evaluation_id": 101})
+    assert current.status_code == 200
+    assert current.json()["subject"]["dataset"] == "J1"
+
+    saved = client.put(
+        "/api/meta-evaluations",
+        headers={"x-csrf-token": token},
+        json={
+            "evaluation_id": 101,
+            "evaluator_name": "Diego",
+            "score": 4,
+            "rationale": "O juiz foi justo na avaliacao.",
+        },
+    )
+    assert saved.status_code == 200
+    assert meta_service.saved[-1] == (101, "Diego", 4, "O juiz foi justo na avaliacao.")
 
 
 def test_tab_navigation_does_not_cancel_active_run_or_stop_polling() -> None:
