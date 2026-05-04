@@ -1707,19 +1707,6 @@ _INDEX_HTML = """
       ]);
     }
 
-    function populateSelect(id, values, selected) {
-      const select = document.getElementById(id);
-      const selectedSet = new Set(selected || []);
-      select.textContent = "";
-      for (const value of values) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = value;
-        option.selected = selectedSet.has(value);
-        select.appendChild(option);
-      }
-    }
-
     function visibleModelSelectIds() {
       const mode = value("panel_mode");
       if (mode === "single") return ["judge_model"];
@@ -3123,11 +3110,18 @@ _INDEX_HTML = """
     function populateSelect(id, options, valueKey, labelKey) {
       const select = document.getElementById(id);
       const current = select.value;
+      const selectedSet = new Set(Array.isArray(valueKey) ? valueKey : []);
       select.textContent = "";
       for (const optionData of options) {
         const option = document.createElement("option");
-        option.value = optionData[valueKey];
-        option.textContent = optionData[labelKey];
+        if (optionData && typeof optionData === "object" && !Array.isArray(optionData)) {
+          option.value = optionData[valueKey];
+          option.textContent = optionData[labelKey];
+        } else {
+          option.value = optionData;
+          option.textContent = optionData;
+          option.selected = selectedSet.has(optionData);
+        }
         select.appendChild(option);
       }
       if (current && Array.from(select.options).some((option) => option.value === current)) {
