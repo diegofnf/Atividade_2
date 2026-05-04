@@ -266,24 +266,8 @@ def create_app(
     meta_evaluation_service: MetaEvaluationService | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Atividade 2 Judge Console")
-    ensure_schema_on_startup = all(
-        dependency is None
-        for dependency in (
-            service,
-            dashboard_service,
-            dump_service,
-            database_reset_service,
-            judge_prompt_service,
-            meta_evaluation_service,
-        )
-    )
     startup_schema_mode = os.environ.get("ENSURE_SCHEMA_ON_STARTUP", "").strip().lower()
-    if startup_schema_mode in {"0", "false", "no", "off"}:
-        ensure_schema_on_startup = False
-    elif startup_schema_mode in {"1", "true", "yes", "on"}:
-        ensure_schema_on_startup = True
-    elif os.environ.get("APP_ENV", "").strip().lower() == "prod":
-        ensure_schema_on_startup = False
+    ensure_schema_on_startup = startup_schema_mode in {"1", "true", "yes", "on"}
     app.state.csrf_token = secrets.token_urlsafe(32)
     app.state.jobs = JobRegistry(service or RunJudgeService())
     app.state.audit_dir = Path(audit_dir)
@@ -2869,6 +2853,7 @@ _INDEX_HTML = """
           score: Number(value("meta_score")),
           rationale: rationale
         });
+        await loadMetaOptions();
         renderMetaEvaluationState(data.subject, data.records || []);
         document.getElementById("meta_rationale").value = "";
         setText(
