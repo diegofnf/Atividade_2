@@ -151,6 +151,7 @@ class MetaEvaluationSubject:
     judge_model: str
     judge_score: int
     judge_rationale: str
+    judge_chain_of_thought: str
     question_text: str
     reference_answer: str
     candidate_answer: str

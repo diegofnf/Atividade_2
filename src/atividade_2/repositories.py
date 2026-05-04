@@ -1202,6 +1202,7 @@ class JudgeRepository:
             judge_model=row[5],
             judge_score=int(row[6]),
             judge_rationale=row[7],
+            judge_chain_of_thought=row[7],
             question_text=row[8],
             reference_answer=row[9],
             candidate_answer=row[10],

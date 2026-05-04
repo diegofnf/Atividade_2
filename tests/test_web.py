@@ -722,6 +722,7 @@ class FakeMetaEvaluationService:
                 "judge_model": "modelo-juiz",
                 "judge_score": 4,
                 "judge_rationale": "Justificativa do juiz",
+                "judge_chain_of_thought": "Chain of thoughts do juiz",
                 "question_text": "Enunciado da questao",
                 "reference_answer": "Gabarito oficial",
                 "candidate_answer": "Resposta do candidato",
@@ -952,7 +953,9 @@ def test_web_index_contains_meta_evaluation_tab() -> None:
     assert 'id="meta_evaluation_select"' in response.text
     assert 'id="meta_save"' in response.text
     assert 'id="meta_subject_judge_rationale"' in response.text
+    assert 'id="meta_subject_chain_of_thought"' in response.text
     assert 'id="meta_records_body"' in response.text
+    assert response.text.index("Meta-avaliacoes registradas") < response.text.index("Avaliacao selecionada")
 
 
 def test_meta_evaluation_endpoints_return_options_and_allow_save() -> None:

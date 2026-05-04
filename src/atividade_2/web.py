@@ -1504,6 +1504,23 @@ _INDEX_HTML = """
         <div id="meta_status" class="status prompt-status">Selecione uma avaliacao J1 para iniciar a meta-avaliacao.</div>
       </aside>
       <section>
+        <h2>Meta-avaliacoes registradas</h2>
+        <div class="table-wrap prompt-log-table">
+          <table aria-label="Historico de meta-avaliacoes">
+            <thead>
+              <tr>
+                <th>quando</th>
+                <th>avaliador</th>
+                <th>nota</th>
+                <th>justificativa</th>
+              </tr>
+            </thead>
+            <tbody id="meta_records_body">
+              <tr><td colspan="4" class="muted">Nenhuma meta-avaliacao carregada.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="height:16px"></div>
         <div class="prompt-preview">
           <div class="prompt-preview-card">
             <h3>Avaliacao selecionada</h3>
@@ -1534,23 +1551,10 @@ _INDEX_HTML = """
             <h3>Justificativa do juiz</h3>
             <pre id="meta_subject_judge_rationale">Selecione uma avaliacao para ver a justificativa do juiz.</pre>
           </div>
-        </div>
-        <div style="height:16px"></div>
-        <h2>Meta-avaliacoes registradas</h2>
-        <div class="table-wrap prompt-log-table">
-          <table aria-label="Historico de meta-avaliacoes">
-            <thead>
-              <tr>
-                <th>quando</th>
-                <th>avaliador</th>
-                <th>nota</th>
-                <th>justificativa</th>
-              </tr>
-            </thead>
-            <tbody id="meta_records_body">
-              <tr><td colspan="4" class="muted">Nenhuma meta-avaliacao carregada.</td></tr>
-            </tbody>
-          </table>
+          <div class="prompt-preview-card">
+            <h3>Chain of Thoughts</h3>
+            <pre id="meta_subject_chain_of_thought">Selecione uma avaliacao para ver o Chain of Thoughts.</pre>
+          </div>
         </div>
       </section>
     </div>
@@ -2877,6 +2881,7 @@ _INDEX_HTML = """
         setText("meta_subject_reference", "Selecione uma avaliacao para ver o gabarito.");
         setText("meta_subject_candidate_answer", "Selecione uma avaliacao para ver a resposta candidata.");
         setText("meta_subject_judge_rationale", "Selecione uma avaliacao para ver a justificativa do juiz.");
+        setText("meta_subject_chain_of_thought", "Selecione uma avaliacao para ver o Chain of Thoughts.");
         return;
       }
       const promptLabel = subject.prompt_version
@@ -2895,6 +2900,7 @@ _INDEX_HTML = """
       setText("meta_subject_reference", subject.reference_answer || "-");
       setText("meta_subject_candidate_answer", subject.candidate_answer || "-");
       setText("meta_subject_judge_rationale", subject.judge_rationale || "-");
+      setText("meta_subject_chain_of_thought", subject.judge_chain_of_thought || "-");
     }
 
     function renderMetaRecords(records) {
