@@ -8,6 +8,8 @@ services:
     envVars:
       - key: APP_ENV
         value: prod
+      - key: ENSURE_SCHEMA_ON_STARTUP
+        value: "false"
       - key: DATABASE_URL
         fromDatabase:
           name: atividade2-db

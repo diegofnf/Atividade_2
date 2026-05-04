@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import re
 import secrets
 import shlex
@@ -276,6 +277,13 @@ def create_app(
             meta_evaluation_service,
         )
     )
+    startup_schema_mode = os.environ.get("ENSURE_SCHEMA_ON_STARTUP", "").strip().lower()
+    if startup_schema_mode in {"0", "false", "no", "off"}:
+        ensure_schema_on_startup = False
+    elif startup_schema_mode in {"1", "true", "yes", "on"}:
+        ensure_schema_on_startup = True
+    elif os.environ.get("APP_ENV", "").strip().lower() == "prod":
+        ensure_schema_on_startup = False
     app.state.csrf_token = secrets.token_urlsafe(32)
     app.state.jobs = JobRegistry(service or RunJudgeService())
     app.state.audit_dir = Path(audit_dir)
