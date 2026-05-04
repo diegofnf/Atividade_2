@@ -22,11 +22,14 @@ from .config import ConfigurationError
 from .contracts import BatchProgress, EligibilitySummary, EvaluationProgress, PipelineSummary
 from .dashboard import DashboardService, parse_dashboard_filters
 from .database_dump import DatabaseDumpService, DatabaseResetService, resolve_dump_path
+from .db import connect
 from .judge_prompt_configs import JudgePromptConfigService
 from .judge_clients.remote_http import RemoteJudgeError
 from .meta_evaluations import MetaEvaluationService
 from .parser import JudgeParseError
+from .repositories import JudgeRepository
 from .run_judge_service import RunJudgeRequest, RunJudgeResult, RunJudgeService
+from .config import load_settings
 
 
 RunStatus = Literal["queued", "running", "cancelling", "completed", "failed", "cancelled"]
@@ -262,6 +265,17 @@ def create_app(
     meta_evaluation_service: MetaEvaluationService | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Atividade 2 Judge Console")
+    ensure_schema_on_startup = all(
+        dependency is None
+        for dependency in (
+            service,
+            dashboard_service,
+            dump_service,
+            database_reset_service,
+            judge_prompt_service,
+            meta_evaluation_service,
+        )
+    )
     app.state.csrf_token = secrets.token_urlsafe(32)
     app.state.jobs = JobRegistry(service or RunJudgeService())
     app.state.audit_dir = Path(audit_dir)
@@ -271,6 +285,17 @@ def create_app(
     app.state.database_reset_service = database_reset_service or DatabaseResetService()
     app.state.judge_prompt_service = judge_prompt_service or JudgePromptConfigService()
     app.state.meta_evaluation_service = meta_evaluation_service or MetaEvaluationService()
+
+    @app.on_event("startup")
+    def ensure_runtime_schema() -> None:
+        if not ensure_schema_on_startup:
+            return
+        settings = load_settings()
+        connection = connect(settings.database_url)
+        try:
+            JudgeRepository(connection).ensure_schema()
+        finally:
+            connection.close()
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:

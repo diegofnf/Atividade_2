@@ -28,7 +28,6 @@ class MetaEvaluationService:
         connection = self._connect(self._settings_loader().database_url)
         try:
             repository = self._make_repository(connection)
-            repository.ensure_schema()
             return {"evaluations": repository.list_meta_evaluation_targets(dataset="J1")}
         finally:
             connection.close()
@@ -37,7 +36,6 @@ class MetaEvaluationService:
         connection = self._connect(self._settings_loader().database_url)
         try:
             repository = self._make_repository(connection)
-            repository.ensure_schema()
             subject = repository.get_meta_evaluation_subject(evaluation_id=evaluation_id, dataset="J1")
             records = repository.list_meta_evaluations(evaluation_id=evaluation_id)
         finally:
@@ -64,7 +62,6 @@ class MetaEvaluationService:
         connection = self._connect(self._settings_loader().database_url)
         try:
             repository = self._make_repository(connection)
-            repository.ensure_schema()
             subject = repository.get_meta_evaluation_subject(evaluation_id=evaluation_id, dataset="J1")
             if subject is None:
                 raise ValueError("Avaliacao J1 nao encontrada para meta-avaliacao.")

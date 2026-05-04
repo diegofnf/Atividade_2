@@ -35,7 +35,6 @@ class JudgePromptConfigService:
         connection = self._connect(self._settings_loader().database_url)
         try:
             repository = self._make_repository(connection)
-            repository.ensure_schema()
             return {"datasets": repository.list_prompt_datasets()}
         finally:
             connection.close()
@@ -44,7 +43,6 @@ class JudgePromptConfigService:
         connection = self._connect(self._settings_loader().database_url)
         try:
             repository = self._make_repository(connection)
-            repository.ensure_schema()
             record = repository.get_prompt_config(dataset=dataset)
             versions = repository.list_prompt_config_versions(dataset=dataset, limit=25)
             preview = self._build_preview(repository=repository, dataset=dataset, record=record)
@@ -70,7 +68,6 @@ class JudgePromptConfigService:
         connection = self._connect(self._settings_loader().database_url)
         try:
             repository = self._make_repository(connection)
-            repository.ensure_schema()
             saved = repository.create_prompt_config_version(
                 dataset=dataset,
                 prompt=prompt,
