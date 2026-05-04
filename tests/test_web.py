@@ -954,7 +954,6 @@ def test_web_index_contains_meta_evaluation_tab() -> None:
     assert 'data-tab="meta-panel">Meta-Avaliacao</button>' in response.text
     assert 'id="meta_evaluation_select"' in response.text
     assert 'id="meta_save"' in response.text
-    assert 'id="meta_subject_judge_rationale"' in response.text
     assert 'id="meta_subject_chain_of_thought"' in response.text
     assert 'id="meta_records_body"' in response.text
     assert response.text.index("Meta-avaliacoes registradas") < response.text.index("Avaliacao selecionada")

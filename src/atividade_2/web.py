@@ -1548,10 +1548,6 @@ _INDEX_HTML = """
             <pre id="meta_subject_candidate_answer">Selecione uma avaliacao para ver a resposta candidata.</pre>
           </div>
           <div class="prompt-preview-card">
-            <h3>Justificativa do juiz</h3>
-            <pre id="meta_subject_judge_rationale">Selecione uma avaliacao para ver a justificativa do juiz.</pre>
-          </div>
-          <div class="prompt-preview-card">
             <h3>Chain of Thoughts</h3>
             <pre id="meta_subject_chain_of_thought">Selecione uma avaliacao para ver o Chain of Thoughts.</pre>
           </div>
@@ -2880,7 +2876,6 @@ _INDEX_HTML = """
         setText("meta_subject_question", "Selecione uma avaliacao para ver o enunciado.");
         setText("meta_subject_reference", "Selecione uma avaliacao para ver o gabarito.");
         setText("meta_subject_candidate_answer", "Selecione uma avaliacao para ver a resposta candidata.");
-        setText("meta_subject_judge_rationale", "Selecione uma avaliacao para ver a justificativa do juiz.");
         setText("meta_subject_chain_of_thought", "Selecione uma avaliacao para ver o Chain of Thoughts.");
         return;
       }
@@ -2899,7 +2894,6 @@ _INDEX_HTML = """
       setText("meta_subject_question", subject.question_text || "-");
       setText("meta_subject_reference", subject.reference_answer || "-");
       setText("meta_subject_candidate_answer", subject.candidate_answer || "-");
-      setText("meta_subject_judge_rationale", subject.judge_rationale || "-");
       setText("meta_subject_chain_of_thought", subject.judge_chain_of_thought || "-");
     }
 
