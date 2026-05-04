@@ -1529,7 +1529,7 @@ _INDEX_HTML = """
         </label>
         <div class="actions">
           <button class="secondary" id="meta_reload" type="button">Recarregar</button>
-          <button class="secondary" id="meta_cancel_edit" type="button">Cancelar edicao</button>
+          <button class="secondary" id="meta_cancel_edit" type="button" style="display:none;">Cancelar edicao</button>
           <button id="meta_save" type="button">Salvar</button>
         </div>
         <div id="meta_status" class="status prompt-status">Selecione uma avaliacao J1 para iniciar a meta-avaliacao.</div>
@@ -2965,6 +2965,7 @@ _INDEX_HTML = """
       document.getElementById("meta_score").value = String(entry.score || 1);
       document.getElementById("meta_rationale").value = entry.rationale || "";
       document.getElementById("meta_save").textContent = "Atualizar";
+      document.getElementById("meta_cancel_edit").style.display = "";
       setText("meta_status", `Editando meta-avaliacao ${display(entry.meta_evaluation_id)}.`);
     }
 
@@ -2973,6 +2974,7 @@ _INDEX_HTML = """
       document.getElementById("meta_rationale").value = "";
       document.getElementById("meta_score").value = "1";
       document.getElementById("meta_save").textContent = "Salvar";
+      document.getElementById("meta_cancel_edit").style.display = "none";
     }
 
     async function deleteMetaEvaluation(metaEvaluationId) {
